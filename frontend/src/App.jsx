@@ -1,117 +1,76 @@
-import React, { useState } from "react";
+import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import Navbar from "./components/Navbar.jsx";
+import { useAuth } from "@clerk/clerk-react";
+
+import Home from "./pages/Home.jsx";
+import SignInPage from "./pages/SignInPage.jsx";
+import SignUpPage from "./pages/SignUpPage.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Workout from "./pages/Workout.jsx";
 import Diet from "./pages/Diet.jsx";
 import Progress from "./pages/Progress.jsx";
-import Login from "./pages/Login.jsx";
-import Register from "./pages/Register.jsx";
+import Navbar from "./components/Navbar.jsx";
 
-const PrivateRoute = ({ token, children }) => {
-  if (!token) return <Navigate to="/login" replace />;
-  return children;
+// ── Spinner shown while Clerk initialises ────────────────────────────────────
+const Loader = () => (
+  <div style={{
+    minHeight: "100vh", display: "flex", alignItems: "center",
+    justifyContent: "center", background: "#020617"
+  }}>
+    <div style={{
+      width: 42, height: 42, borderRadius: "50%",
+      border: "3px solid rgba(34,211,238,0.15)",
+      borderTop: "3px solid #22d3ee",
+      animation: "spin 0.75s linear infinite"
+    }} />
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  </div>
+);
+
+// ── Route guards ─────────────────────────────────────────────────────────────
+const PrivateRoute = ({ children }) => {
+  const { isSignedIn, isLoaded } = useAuth();
+  if (!isLoaded) return <Loader />;
+  return isSignedIn ? children : <Navigate to="/sign-in" replace />;
 };
 
-const App = () => {
-  const [token, setToken] = useState(localStorage.getItem("token") || null);
-
-  const handleLoginSuccess = (newToken) => {
-    localStorage.setItem("token", newToken);
-    setToken(newToken);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-  };
-
-  const AuthedLayout = ({ children }) => (
-    <>
-      <Navbar onLogout={handleLogout} />
-      <main className="app-main fade-in">{children}</main>
-    </>
-  );
-
-  return (
-    <div className="app-shell">
-      <Routes>
-        {/* auth routes */}
-        <Route
-          path="/login"
-          element={
-            token ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <main className="app-main fade-in">
-                <Login onLoginSuccess={handleLoginSuccess} />
-              </main>
-            )
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            token ? (
-              <Navigate to="/dashboard" replace />
-            ) : (
-              <main className="app-main fade-in">
-                <Register onRegistered={handleLoginSuccess} />
-              </main>
-            )
-          }
-        />
-
-        {/* redirect root */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-        {/* private pages */}
-        <Route
-          path="/dashboard"
-          element={
-            <PrivateRoute token={token}>
-              <AuthedLayout>
-                <Dashboard />
-              </AuthedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/workout"
-          element={
-            <PrivateRoute token={token}>
-              <AuthedLayout>
-                <Workout />
-              </AuthedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/diet"
-          element={
-            <PrivateRoute token={token}>
-              <AuthedLayout>
-                <Diet />
-              </AuthedLayout>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/progress"
-          element={
-            <PrivateRoute token={token}>
-              <AuthedLayout>
-                <Progress />
-              </AuthedLayout>
-            </PrivateRoute>
-          }
-        />
-
-        {/* fallback */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </div>
-  );
+const PublicOnlyRoute = ({ children }) => {
+  const { isSignedIn, isLoaded } = useAuth();
+  if (!isLoaded) return <Loader />;
+  return !isSignedIn ? children : <Navigate to="/dashboard" replace />;
 };
+
+// ── Layout for authenticated pages ───────────────────────────────────────────
+const AppLayout = ({ children }) => (
+  <>
+    <Navbar />
+    <main style={{ paddingTop: 64 }}>{children}</main>
+  </>
+);
+
+// ── App ──────────────────────────────────────────────────────────────────────
+const App = () => (
+  <Routes>
+    {/* Public landing */}
+    <Route path="/" element={<Home />} />
+
+    {/* Auth pages – redirect away if already signed in */}
+    <Route path="/sign-in/*" element={<PublicOnlyRoute><SignInPage /></PublicOnlyRoute>} />
+    <Route path="/sign-up/*" element={<PublicOnlyRoute><SignUpPage /></PublicOnlyRoute>} />
+
+    {/* Legacy redirects so old /login & /register links still work */}
+    <Route path="/login"    element={<Navigate to="/sign-in" replace />} />
+    <Route path="/register" element={<Navigate to="/sign-up" replace />} />
+
+    {/* Protected pages */}
+    <Route path="/dashboard" element={<PrivateRoute><AppLayout><Dashboard /></AppLayout></PrivateRoute>} />
+    <Route path="/workout"   element={<PrivateRoute><AppLayout><Workout /></AppLayout></PrivateRoute>} />
+    <Route path="/diet"      element={<PrivateRoute><AppLayout><Diet /></AppLayout></PrivateRoute>} />
+    <Route path="/progress"  element={<PrivateRoute><AppLayout><Progress /></AppLayout></PrivateRoute>} />
+
+    {/* Fallback */}
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes>
+);
 
 export default App;
